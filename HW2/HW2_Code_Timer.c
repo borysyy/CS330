@@ -40,13 +40,13 @@ void printtime()
 int main(void)
 {
     starttimer();
-   
-   for(int i = 0; i < 1000000; i++)
-   {
+
+    for (int i = 0; i < 1000000; i++)
+    {
         printf("Hello\n");
         printf("HW\n");
         printf("Test\n");
-   }
+    }
 
     endtimer();
 
