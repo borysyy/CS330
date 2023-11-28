@@ -37,14 +37,14 @@ int main(void)
             if (pid == 0)
             {
                 char letter = 'A' + j;
-                cout << letter;
+                cout << letter << flush; // flush the output
                 exit(0);
             }
         }
 
         while (wait(NULL) > 0)
             ;
-        cout << "\n";
+        cout << endl; // use endl to insert a newline and flush the output
     }
 
     return 0;
