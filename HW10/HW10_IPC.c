@@ -1,16 +1,60 @@
+/*
+Written by: Slava Borysyuk
+Course: CS330
+11/28/2023
+HW10_IPC
+Output:
+Producer 9378: 'work1' for 91591472 nanoseconds sent at 1701211353 seconds
+Consumer 9379: 'work1' for 91591472 nanoseconds sent at 1701211353 seconds
+Producer 9378: 'work2' for 99103954 nanoseconds sent at 1701211354 seconds
+Producer 9378: 'work3' for 172057677 nanoseconds sent at 1701211354 seconds
+Consumer 9380: 'work2' for 99103954 nanoseconds sent at 1701211354 seconds
+Producer 9378: 'work4' for 455899238 nanoseconds sent at 1701211354 seconds
+Consumer 9381: 'work3' for 172057677 nanoseconds sent at 1701211354 seconds
+Consumer 9382: 'work4' for 455899238 nanoseconds sent at 1701211354 seconds
+Producer 9378: 'work5' for 31975438 nanoseconds sent at 1701211354 seconds
+Consumer 9383: 'work5' for 31975438 nanoseconds sent at 1701211354 seconds
+Producer 9378: 'work6' for 28740710 nanoseconds sent at 1701211354 seconds
+Consumer 9379: 'work6' for 28740710 nanoseconds sent at 1701211355 seconds
+Producer 9378: 'work7' for 217700671 nanoseconds sent at 1701211355 seconds
+Producer 9378: 'work8' for 212966948 nanoseconds sent at 1701211355 seconds
+Consumer 9380: 'work7' for 217700671 nanoseconds sent at 1701211355 seconds
+Consumer 9381: 'work8' for 212966948 nanoseconds sent at 1701211355 seconds
+Producer 9378: 'work9' for 221178313 nanoseconds sent at 1701211355 seconds
+Consumer 9382: 'work9' for 221178313 nanoseconds sent at 1701211355 seconds
+Producer 9378: 'work10' for 398418387 nanoseconds sent at 1701211355 seconds
+Consumer 9383: 'work10' for 398418387 nanoseconds sent at 1701211356 seconds
+Producer 9378: 'work11' for 57388921 nanoseconds sent at 1701211356 seconds
+Consumer 9379: 'work11' for 57388921 nanoseconds sent at 1701211356 seconds
+Producer 9378: 'work12' for 390462895 nanoseconds sent at 1701211356 seconds
+Consumer 9380: 'work12' for 390462895 nanoseconds sent at 1701211356 seconds
+Producer 9378: 'work13' for 245963976 nanoseconds sent at 1701211357 seconds
+Consumer 9381: 'work13' for 245963976 nanoseconds sent at 1701211357 seconds
+Producer 9378: 'work14' for 393828786 nanoseconds sent at 1701211357 seconds
+Consumer 9382: 'work14' for 393828786 nanoseconds sent at 1701211357 seconds
+Producer 9378: 'work15' for 241819262 nanoseconds sent at 1701211357 seconds
+Producer 9378: 'work16' for 90388660 nanoseconds sent at 1701211358 seconds
+Consumer 9383: 'work15' for 241819262 nanoseconds sent at 1701211358 seconds
+Consumer 9379: 'work16' for 90388660 nanoseconds sent at 1701211358 seconds
+Producer 9378: 'work17' for 80274532 nanoseconds sent at 1701211358 seconds
+Consumer 9380: 'work17' for 80274532 nanoseconds sent at 1701211358 seconds
+Producer 9378: 'work18' for 357250267 nanoseconds sent at 1701211358 seconds
+Producer 9378: 'work19' for 127815547 nanoseconds sent at 1701211358 seconds
+Consumer 9382: 'work19' for 127815547 nanoseconds sent at 1701211358 seconds
+Producer 9378: 'work20' for 397285927 nanoseconds sent at 1701211358 seconds
+Consumer 9381: 'work18' for 357250267 nanoseconds sent at 1701211358 seconds
+Consumer 9383: 'work20' for 397285927 nanoseconds sent at 1701211359 seconds
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/sem.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <string.h>
 #include <errno.h>
 #include <semaphore.h>
-#include <errno.h>
+#include <fcntl.h>
 
 #define MAX_WORK_DESCRIPTION_LENGTH 50
 #define MAX_CONSUMERS 5
@@ -25,81 +69,14 @@ struct msg_buffer
 {
     long msg_type;
     char work_description[MAX_WORK_DESCRIPTION_LENGTH];
-    int execution_time; // Random execution time
+    long execution_time; // Random execution time
 };
-
-void log_message(const char *prefix, const char *work, int execution_time)
-{
-    struct timespec timestamp;
-    clock_gettime(CLOCK_REALTIME, &timestamp);
-
-    printf("%s %d: '%s' for %d nanoseconds sent at %ld seconds\n",
-           prefix, getpid(), work, execution_time, timestamp.tv_sec);
-}
-
-void producer(int msgq_id)
-{
-    srand(time(NULL));
-    FILE *work_file = fopen("work.txt", "r");
-    if (!work_file)
-    {
-        perror("Error opening work file");
-        exit(EXIT_FAILURE);
-    }
-
-    char line[MAX_WORK_DESCRIPTION_LENGTH];
-    printf("Hi");
-    while (fgets(line, sizeof(line), work_file) != NULL)
-    {
-        printf("Sazzadio");
-        sem_wait(consumer_ready);
-
-        struct msg_buffer message;
-        message.msg_type = 1; // Message type for consumers
-
-        // Read work description from file
-        size_t length = strlen(line);
-        if (line[length - 1] == '\n')
-        {
-            line[length - 1] = '\0'; // Removing the newline character
-        }
-        strncpy(message.work_description, line, sizeof(line));
-
-        printf("sober");
-
-        // Generate random execution time
-        message.execution_time = rand() % 5 + 1; // Range: 1-5 seconds
-
-        // Send message to the queue
-        if (msgsnd(msgq_id, &message, sizeof(message) - sizeof(long), 0) == -1)
-        {
-            perror("Error sending message");
-            exit(EXIT_FAILURE);
-        }
-
-        printf("SCOTTY");
-
-        log_message("Producer", message.work_description, message.execution_time);
-        sleep(rand() % 3); // Random wait before sending next work
-
-        sem_post(producer_ready);
-    }
-
-    fclose(work_file);
-}
 
 void consumer(int msgq_id)
 {
 
     char log_file_name[30];
     sprintf(log_file_name, "consumer_%d.log", getpid()); // Use process ID in log file name
-
-    FILE *log_file = fopen(log_file_name, "w");
-    if (!log_file)
-    {
-        perror("Error opening log file");
-        exit(EXIT_FAILURE);
-    }
 
     while (1)
     {
@@ -121,49 +98,40 @@ void consumer(int msgq_id)
             message.work_description[length - 1] = '\0';
         }
 
-        log_message("Consumer", message.work_description, message.execution_time);
+        struct timespec sleep_time, remaining_time;
+        sleep_time.tv_sec = 0;
+        sleep_time.tv_nsec = message.execution_time;
+        nanosleep(&sleep_time, &remaining_time);
+
+        printf("%s %d: '%s' for %ld nanoseconds sent at %ld seconds\n",
+               "Consumer", getpid(), message.work_description, message.execution_time, time(NULL));
+
+        FILE *log_file = fopen(log_file_name, "a");
+        if (!log_file)
+        {
+            perror("Error opening log file");
+            exit(EXIT_FAILURE);
+        }
 
         // Log work details to the file
-        fprintf(log_file, "%s %d: '%s' for %d nanoseconds sent at %ld seconds\n",
+        fprintf(log_file, "%s %d: '%s' for %ld nanoseconds sent at %ld seconds\n",
                 "Consumer", getpid(), message.work_description, message.execution_time, time(NULL));
-        fflush(log_file); // Ensure the data is written to the file immediately
 
-        sleep(message.execution_time); // Simulate work execution
+        fclose(log_file);
 
         sem_post(consumer_ready);
     }
-
-    fclose(log_file);
 }
 
-int main()
+void producer(int msgq_id)
 {
-    int msgq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
-    if (msgq_id == -1)
+
+    srand(time(NULL));
+    FILE *work_file = fopen("work.txt", "r");
+    if (!work_file)
     {
-        perror("Error creating message queue");
+        perror("Error opening work file");
         exit(EXIT_FAILURE);
-    }
-
-    consumer_ready = sem_open(CONSUMER_READY, O_CREAT, 0600, MAX_CONSUMERS);
-    producer_ready = sem_open(PRODUCER_READY, O_CREAT, 0600, 0);
-
-    if (consumer_ready == SEM_FAILED || producer_ready == SEM_FAILED)
-    {
-        perror("sem_open error");
-        exit(1);
-    }
-
-    pid_t producer_pid = fork();
-    if (producer_pid == -1)
-    {
-        perror("Error forking producer process");
-        exit(EXIT_FAILURE);
-    }
-    else if (producer_pid == 0)
-    {
-        producer(msgq_id);
-        exit(EXIT_SUCCESS);
     }
 
     pid_t consumer_pids[MAX_CONSUMERS];
@@ -182,12 +150,95 @@ int main()
         }
     }
 
+    char line[MAX_WORK_DESCRIPTION_LENGTH];
+
+    char log_file_name[30];
+    sprintf(log_file_name, "producer_%d.log", getpid()); // Use process ID in log file name
+
+    while (fgets(line, sizeof(line), work_file) != NULL)
+    {
+
+        if (sem_wait(consumer_ready) == -1)
+        {
+            printf("Error");
+        }
+
+        struct msg_buffer message;
+        message.msg_type = 1; // Message type for consumers
+
+        // Read work description from file
+        size_t length = strlen(line);
+        if (line[length - 1] == '\n')
+        {
+            line[length - 1] = '\0'; // Removing the newline character
+        }
+        strncpy(message.work_description, line, sizeof(line));
+
+        // Generate random execution time
+        message.execution_time = rand() % 500000000;
+
+        // Send message to the queue
+        if (msgsnd(msgq_id, &message, sizeof(message) - sizeof(long), 0) == -1)
+        {
+            perror("Error sending message");
+            exit(EXIT_FAILURE);
+        }
+
+        struct timespec sleep_time, remaining_time;
+        sleep_time.tv_sec = 0;
+        sleep_time.tv_nsec = rand() % 500000000;
+        nanosleep(&sleep_time, &remaining_time);
+
+        printf("%s %d: '%s' for %ld nanoseconds sent at %ld seconds\n",
+               "Producer", getpid(), message.work_description, message.execution_time, time(NULL));
+
+        FILE *log_file = fopen(log_file_name, "a");
+        if (!log_file)
+        {
+            perror("Error opening log file");
+            exit(EXIT_FAILURE);
+        }
+
+        // Log work details to the file
+        fprintf(log_file, "%s %d: '%s' for %ld nanoseconds sent at %ld seconds\n",
+                "Producer", getpid(), message.work_description, message.execution_time, time(NULL));
+
+        fclose(log_file);
+
+        sem_post(producer_ready);
+    }
+
+    fclose(work_file);
+
     // Wait for all child processes to complete
-    waitpid(producer_pid, NULL, 0);
     for (int i = 0; i < MAX_CONSUMERS; ++i)
     {
         waitpid(consumer_pids[i], NULL, 0);
     }
+}
+
+int main()
+{
+
+    int msgq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
+
+    if (msgq_id == -1)
+    {
+        perror("Error creating message queue");
+        exit(EXIT_FAILURE);
+    }
+
+    consumer_ready = sem_open(CONSUMER_READY, O_CREAT, 0600, MAX_CONSUMERS);
+    producer_ready = sem_open(PRODUCER_READY, O_CREAT, 0600, 0);
+
+    if (consumer_ready == SEM_FAILED || producer_ready == SEM_FAILED)
+    {
+        printf("sem_open error");
+
+        exit(1);
+    }
+
+    producer(msgq_id);
 
     // Clean up resources
     if (msgctl(msgq_id, IPC_RMID, NULL) == -1)
