@@ -45,6 +45,7 @@ Producer 9378: 'work20' for 397285927 nanoseconds sent at 1701211358 seconds
 Consumer 9381: 'work18' for 357250267 nanoseconds sent at 1701211358 seconds
 Consumer 9383: 'work20' for 397285927 nanoseconds sent at 1701211359 seconds
 */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -62,29 +63,35 @@ Consumer 9383: 'work20' for 397285927 nanoseconds sent at 1701211359 seconds
 #define CONSUMER_READY "/consumer_ready"
 #define PRODUCER_READY "/producer_ready"
 
-sem_t *consumer_ready;
-sem_t *producer_ready;
+sem_t *consumer_ready; // Semaphore for consumer synchronization
+sem_t *producer_ready; // Semaphore for producer synchronization
 
 struct msg_buffer
 {
-    long msg_type;
+    long msg_type; // Message type for consumers
     char work_description[MAX_WORK_DESCRIPTION_LENGTH];
-    long execution_time; // Random execution time
+    long execution_time;
 };
 
 void consumer(int msgq_id)
 {
+    // Function to simulate consumer behavior
 
     char log_file_name[30];
     sprintf(log_file_name, "consumer_%d.log", getpid()); // Use process ID in log file name
 
     while (1)
     {
-
-        sem_wait(producer_ready);
+        // Wait until the producer signals that work is ready
+        if (sem_wait(producer_ready) == -1)
+        {
+            perror("Error waiting for producer semaphore");
+            exit(EXIT_FAILURE);
+        }
 
         struct msg_buffer message;
-        if (msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 1, 0) == -1)
+        // Receive message from the message queue
+        if (msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 1, IPC_NOWAIT) == -1)
         {
             perror("Error receiving message");
             exit(EXIT_FAILURE);
@@ -94,15 +101,16 @@ void consumer(int msgq_id)
         size_t length = strlen(message.work_description);
         if (message.work_description[length - 1] == '\n')
         {
-
             message.work_description[length - 1] = '\0';
         }
 
+        // Simulate execution time
         struct timespec sleep_time, remaining_time;
         sleep_time.tv_sec = 0;
         sleep_time.tv_nsec = message.execution_time;
         nanosleep(&sleep_time, &remaining_time);
 
+        // Print and log work details
         printf("%s %d: '%s' for %ld nanoseconds sent at %ld seconds\n",
                "Consumer", getpid(), message.work_description, message.execution_time, time(NULL));
 
@@ -119,12 +127,18 @@ void consumer(int msgq_id)
 
         fclose(log_file);
 
-        sem_post(consumer_ready);
+        // Signal producer that a consumer is ready for more work
+        if (sem_post(consumer_ready) == -1)
+        {
+            perror("Error signaling consumer semaphore");
+            exit(EXIT_FAILURE);
+        }
     }
 }
 
 void producer(int msgq_id)
 {
+    // Function to simulate producer behavior
 
     srand(time(NULL));
     FILE *work_file = fopen("work.txt", "r");
@@ -157,10 +171,11 @@ void producer(int msgq_id)
 
     while (fgets(line, sizeof(line), work_file) != NULL)
     {
-
+        // Wait until a consumer is ready to receive work
         if (sem_wait(consumer_ready) == -1)
         {
-            printf("Error");
+            perror("Error waiting for consumer semaphore");
+            exit(EXIT_FAILURE);
         }
 
         struct msg_buffer message;
@@ -178,17 +193,19 @@ void producer(int msgq_id)
         message.execution_time = rand() % 500000000;
 
         // Send message to the queue
-        if (msgsnd(msgq_id, &message, sizeof(message) - sizeof(long), 0) == -1)
+        if (msgsnd(msgq_id, &message, sizeof(message) - sizeof(long), IPC_NOWAIT) == -1)
         {
             perror("Error sending message");
             exit(EXIT_FAILURE);
         }
 
+        // Simulate some time before producing the next work
         struct timespec sleep_time, remaining_time;
         sleep_time.tv_sec = 0;
         sleep_time.tv_nsec = rand() % 500000000;
         nanosleep(&sleep_time, &remaining_time);
 
+        // Print and log work details
         printf("%s %d: '%s' for %ld nanoseconds sent at %ld seconds\n",
                "Producer", getpid(), message.work_description, message.execution_time, time(NULL));
 
@@ -205,7 +222,12 @@ void producer(int msgq_id)
 
         fclose(log_file);
 
-        sem_post(producer_ready);
+        // Signal consumer that more work is available
+        if (sem_post(producer_ready) == -1)
+        {
+            perror("Error signaling producer semaphore");
+            exit(EXIT_FAILURE);
+        }
     }
 
     fclose(work_file);
@@ -219,8 +241,9 @@ void producer(int msgq_id)
 
 int main()
 {
+    // Main function
 
-    int msgq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
+    int msgq_id = msgget(IPC_PRIVATE, IPC_CREAT | 0666); // Create a message queue
 
     if (msgq_id == -1)
     {
@@ -228,16 +251,17 @@ int main()
         exit(EXIT_FAILURE);
     }
 
+    // Initialize semaphores
     consumer_ready = sem_open(CONSUMER_READY, O_CREAT, 0600, MAX_CONSUMERS);
     producer_ready = sem_open(PRODUCER_READY, O_CREAT, 0600, 0);
 
     if (consumer_ready == SEM_FAILED || producer_ready == SEM_FAILED)
     {
-        printf("sem_open error");
-
-        exit(1);
+        perror("Semaphore initialization failed");
+        exit(EXIT_FAILURE);
     }
 
+    // Start producer
     producer(msgq_id);
 
     // Clean up resources
@@ -248,26 +272,26 @@ int main()
 
     if (sem_close(consumer_ready) == -1)
     {
-        perror("error");
-        exit(1);
+        perror("Error closing consumer semaphore");
+        exit(EXIT_FAILURE);
     }
 
     if (sem_close(producer_ready) == -1)
     {
-        perror("error");
-        exit(1);
+        perror("Error closing producer semaphore");
+        exit(EXIT_FAILURE);
     }
 
     if (sem_unlink(CONSUMER_READY) == -1)
     {
-        perror("error");
-        exit(1);
+        perror("Error unlinking consumer semaphore");
+        exit(EXIT_FAILURE);
     }
 
     if (sem_unlink(PRODUCER_READY) == -1)
     {
-        perror("error");
-        exit(1);
+        perror("Error unlinking producer semaphore");
+        exit(EXIT_FAILURE);
     }
 
     return 0;
